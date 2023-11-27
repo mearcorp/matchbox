@@ -276,11 +276,14 @@ impl<C: BuildablePlurality> WebRtcSocketBuilder<C> {
         }
 
         let (peer_state_tx, peer_state_rx) = futures_channel::mpsc::unbounded();
+        let (flow_tx, flow_rx) = futures_channel::mpsc::unbounded();
 
         let (messages_from_peers_tx, messages_from_peers_rx) =
             new_senders_and_receivers(&self.config.channels);
+
         let (peer_messages_out_tx, peer_messages_out_rx) =
             new_senders_and_receivers(&self.config.channels);
+
         let channels = messages_from_peers_rx
             .into_iter()
             .zip(peer_messages_out_tx.into_iter())
@@ -293,6 +296,7 @@ impl<C: BuildablePlurality> WebRtcSocketBuilder<C> {
             WebRtcSocket {
                 id: Default::default(),
                 id_rx,
+                flow_rx,
                 peer_state_rx,
                 peers: Default::default(),
                 channels,
@@ -300,6 +304,7 @@ impl<C: BuildablePlurality> WebRtcSocketBuilder<C> {
             },
             Box::pin(run_socket(
                 id_tx,
+                flow_tx,
                 self.config,
                 peer_messages_out_rx,
                 peer_state_tx,
@@ -357,6 +362,7 @@ impl WebRtcChannel {
 pub struct WebRtcSocket<C: ChannelPlurality = SingleChannel> {
     id: once_cell::race::OnceBox<PeerId>,
     id_rx: crossbeam_channel::Receiver<PeerId>,
+    flow_rx: futures_channel::mpsc::UnboundedReceiver<String>,
     peer_state_rx: futures_channel::mpsc::UnboundedReceiver<(PeerId, PeerState)>,
     peers: HashMap<PeerId, PeerState>,
     channels: Vec<Option<WebRtcChannel>>,
@@ -425,6 +431,15 @@ impl<C: ChannelPlurality> WebRtcSocket<C> {
             }
         }
         changes
+    }
+
+    /// Handle flow commands
+    pub fn flow_commands(&mut self) -> Vec<String> {
+        let mut commands = Vec::new();
+        while let Ok(Some(command)) = self.flow_rx.try_next() {
+            commands.push(command);
+        }
+        commands
     }
 
     /// Returns an iterator of the ids of the connected peers.
@@ -598,10 +613,12 @@ pub struct MessageLoopChannels {
     pub peer_messages_out_rx: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
     pub peer_state_tx: futures_channel::mpsc::UnboundedSender<(PeerId, PeerState)>,
     pub messages_from_peers_tx: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
+    pub flow_tx: futures_channel::mpsc::UnboundedSender<String>
 }
 
 async fn run_socket(
     id_tx: crossbeam_channel::Sender<PeerId>,
+    flow_tx: futures_channel::mpsc::UnboundedSender<String>,
     config: SocketConfig,
     peer_messages_out_rx: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
     peer_state_tx: futures_channel::mpsc::UnboundedSender<(PeerId, PeerState)>,
@@ -625,6 +642,7 @@ async fn run_socket(
         peer_messages_out_rx,
         peer_state_tx,
         messages_from_peers_tx,
+        flow_tx,
     };
     let message_loop_fut = message_loop::<UseMessenger>(
         id_tx,

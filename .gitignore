@@ -2,7 +2,8 @@
 crates/*/target
 **/*.rs.bk
 .cargo/config
-/.idea
+**/*/.idea/*
+.idea/*
 /.vscode
 /benches/target
 *.code-workspace

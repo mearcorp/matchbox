@@ -11,5 +11,5 @@ pub type PeerRequest = matchbox_protocol::PeerRequest<PeerSignal>;
 pub enum PeerSignal {
     IceCandidate(String),
     Offer(String),
-    Answer(String),
+    Answer(String)
 }

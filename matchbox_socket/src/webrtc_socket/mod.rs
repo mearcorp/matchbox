@@ -135,6 +135,7 @@ async fn message_loop<M: Messenger>(
         mut peer_messages_out_rx,
         messages_from_peers_tx,
         peer_state_tx,
+        flow_tx
     } = channels;
 
     let mut handshakes = FuturesUnordered::new();
@@ -172,6 +173,9 @@ async fn message_loop<M: Messenger>(
                     match event {
                         PeerEvent::IdAssigned(peer_uuid) => {
                             id_tx.try_send(peer_uuid.to_owned()).unwrap();
+                        },
+                        PeerEvent::FlowCommand(command) => {
+                            flow_tx.unbounded_send(command).expect("failed to send flow command");
                         },
                         PeerEvent::NewPeer(peer_uuid) => {
                             let (signal_tx, signal_rx) = futures_channel::mpsc::unbounded();
@@ -214,8 +218,11 @@ async fn message_loop<M: Messenger>(
                             .get_mut(&peer)
                             .expect("couldn't find data channel for peer")
                             .get_mut(channel_index).unwrap_or_else(|| panic!("couldn't find data channel with index {channel_index}"));
-                        data_channel.send(packet).unwrap();
 
+                        let result = data_channel.send(packet);
+                        if let Err(e) = result {
+                            warn!("data_channel.send error {:?}", e);
+                        }
                     }
                     Some((_, None)) | None => {
                         // Receiver end of outgoing message channel closed,

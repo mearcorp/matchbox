@@ -74,9 +74,15 @@ impl Signaller for WasmSignaller {
 
 impl PeerDataSender for RtcDataChannel {
     fn send(&mut self, packet: Packet) -> Result<(), MessagingError> {
-        self.send_with_u8_array(&packet)
+        let result = self.send_with_u8_array(&packet)
             .efix()
-            .map_err(MessagingError::from)
+            .map_err(MessagingError::from);
+
+        if let Err(e) = result {
+            warn!("RtcDataChannel send with  error {:?}", e);
+        }
+
+        Ok(())
     }
 }
 

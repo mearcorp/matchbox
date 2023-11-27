@@ -22,6 +22,7 @@ pub enum PeerEvent<S> {
     /// Sent by the server to the connecting peer, immediately after connection
     /// before any other events
     IdAssigned(PeerId),
+    FlowCommand(String),
     NewPeer(PeerId),
     PeerLeft(PeerId),
     Signal {

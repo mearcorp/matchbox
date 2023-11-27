@@ -24,6 +24,13 @@ use tracing::{error, info, warn};
 #[derive(Debug, Deserialize, Default, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct RoomId(String);
 
+#[derive(Debug, Deserialize, Default, Clone, PartialEq, Eq, Hash)]
+pub(crate) enum Roles {
+    Player,
+    Worker,
+    Watcher
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct RequestedRoom {
     id: RoomId,
@@ -157,18 +164,27 @@ async fn handle_ws(
             room: requested_room.clone(),
         });
 
+        // Send IdAssigned
         let event_text = JsonPeerEvent::IdAssigned(peer_uuid).to_string();
         let event = Message::Text(event_text.clone());
-
         if let Err(e) = add_peer_state.try_send(peer_uuid, event) {
             error!("error sending to {peer_uuid:?}: {e:?}");
         } else {
             info!("{:?} -> {:?}", peer_uuid, event_text);
         };
 
+        // Send FlowCommand
+        let event_text = JsonPeerEvent::FlowCommand("Ololo trololo command".to_owned()).to_string();
+        let event = Message::Text(event_text.clone());
+        if let Err(e) = add_peer_state.try_send(peer_uuid, event) {
+            error!("error sending to {peer_uuid:?}: {e:?}");
+        } else {
+            info!("{:?} -> {:?}", peer_uuid, event_text);
+        };
+
+        // Send NewPear
         let event_text = JsonPeerEvent::NewPeer(peer_uuid).to_string();
         let event = Message::Text(event_text.clone());
-
         for peer_id in peers {
             // Tell everyone about this new peer
             if let Err(e) = add_peer_state.try_send(peer_id, event.clone()) {
